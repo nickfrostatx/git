@@ -1,0 +1,9 @@
+[package]
+name = "git"
+version = "0.1.0"
+authors = ["Nick Frost <nickfrostatx@gmail.com>"]
+license = "MIT"
+
+[dependencies]
+flate2 = "0.2.20"
+sha1 = "0.2.0"
