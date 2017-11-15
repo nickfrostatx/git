@@ -108,13 +108,22 @@ pub fn write_obj(obj: &Object) -> GitResult<String> {
         },
     }
 
-    // Actually make the hash
-    let f = try!(fs::File::create(path_for_hash(&hash)));
-    let mut encoder = ZlibEncoder::new(f, Compression::Default);
+    // Actually create the file
+    let file_path = path_for_hash(&hash);
+    match fs::OpenOptions::new().write(true).create_new(true).open(file_path) {
+        Ok(f) => {
+            // Write object
+            let mut encoder = ZlibEncoder::new(f, Compression::Default);
+            try!(encoder.write(&header));
+            try!(encoder.write(&obj.data));
+            try!(encoder.finish());
+        },
+        Err(err) => match err.kind() {
+            // It's fine if the object with that hash already exists
+            io::ErrorKind::AlreadyExists => (),
+            _ => return Err(GitError::from(err)),
+        },
+    }
 
-    // Write object
-    try!(encoder.write(&header));
-    try!(encoder.write(&obj.data));
-    try!(encoder.finish());
     Ok(hash)
 }
