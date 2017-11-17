@@ -8,8 +8,10 @@ use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
 use sha1::Sha1;
 
+use parse;
 use types::{GitError, GitResult};
 
+#[derive(PartialEq, Eq)]
 pub enum ObjectType {
     Blob,
     Tree,
@@ -36,29 +38,10 @@ fn path_for_hash(obj_hash: &str) -> PathBuf {
     path
 }
 
-fn read_until(reader: &mut Read, end: char) -> GitResult<Vec<u8>> {
-    let mut rv = vec![];
-    let buf: &mut [u8; 1] = &mut [0];
-
-    loop {
-        let nread = try!(reader.read(buf));
-        if nread < 1 {
-            break;
-        } else {
-            if buf[0] as char == end {
-                break;
-            }
-            rv.push(buf[0])
-        }
-    }
-
-    Ok(rv)
-}
-
 pub fn read_obj(hash: &str) -> GitResult<Object> {
     let f = try!(fs::File::open(path_for_hash(hash)));
     let mut decoder = ZlibDecoder::new(f);
-    let type_str = try!(read_until(&mut decoder, ' '));
+    let type_str = try!(parse::read_until(&mut decoder, b' '));
 
     let kind: ObjectType = try!(match &type_str[..] {
         b"blob" => Ok(ObjectType::Blob),
@@ -69,8 +52,8 @@ pub fn read_obj(hash: &str) -> GitResult<Object> {
     });
     
     let expected_size = {
-        let bytes = try!(read_until(&mut decoder, '\0'));
-        let s = try!(str::from_utf8(&bytes));
+        let bytes = try!(parse::read_until(&mut decoder, b'\0'));
+        let s = try!(String::from_utf8(bytes));
         try!(s.parse::<usize>())
     };
 

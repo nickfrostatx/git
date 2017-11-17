@@ -3,6 +3,7 @@ use std::fmt;
 use std::io;
 use std::num;
 use std::str;
+use std::string;
 
 #[derive(Debug)]
 pub enum GitError {
@@ -49,8 +50,8 @@ impl From<io::Error> for GitError {
     }
 }
 
-impl From<str::Utf8Error> for GitError {
-    fn from(_: str::Utf8Error) -> GitError {
+impl From<string::FromUtf8Error> for GitError {
+    fn from(_: string::FromUtf8Error) -> GitError {
         GitError::Message("Invalid UTF-8 data")
     }
 }
