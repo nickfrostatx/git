@@ -130,7 +130,7 @@ pub fn from_object(object: &Object) -> GitResult<Commit> {
 }
 
 impl Commit {
-    pub fn to_object(&self) -> Object {
+    pub fn as_object(&self) -> Object {
         let mut data = String::new();
 
         data.push_str(&format!("tree {}\n", self.tree));
