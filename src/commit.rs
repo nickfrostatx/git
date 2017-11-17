@@ -128,3 +128,24 @@ pub fn from_object(object: &Object) -> GitResult<Commit> {
         message: message,
     })
 }
+
+impl Commit {
+    pub fn to_object(&self) -> Object {
+        let mut data = String::new();
+
+        data.push_str(&format!("tree {}\n", self.tree));
+        for parent in &self.parents {
+            data.push_str(&format!("parent {}\n", parent));
+        }
+        data.push_str(&format!("author {} ", self.author));
+        data.push_str(&self.author_date.format("%s %z\n").to_string());
+        data.push_str(&format!("committer {} ", self.committer));
+        data.push_str(&self.committer_date.format("%s %z\n").to_string());
+        data.push_str(&self.message);
+
+        Object {
+            kind: ObjectType::Commit,
+            data: data.into_bytes(),
+        }
+    }
+}
