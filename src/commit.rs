@@ -141,6 +141,7 @@ impl Commit {
         data.push_str(&self.author_date.format("%s %z\n").to_string());
         data.push_str(&format!("committer {} ", self.committer));
         data.push_str(&self.committer_date.format("%s %z\n").to_string());
+        data.push('\n');
         data.push_str(&self.message);
 
         Object {
