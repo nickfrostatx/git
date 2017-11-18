@@ -11,6 +11,7 @@ use std::io::{self, Write, Read};
 
 mod cache;
 mod commit;
+mod index;
 mod parse;
 mod tree;
 mod types;
@@ -94,6 +95,13 @@ fn show_tree(hash: &str) -> GitResult<()> {
     Ok(())
 }
 
+fn show_index() -> GitResult<()> {
+    let ndx = try!(index::read());
+    try!(ndx.write());
+
+    Ok(())
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
@@ -131,6 +139,9 @@ fn main() {
             return;
         }
         show_tree(&args[2])
+    }
+    else if args[1] == "show-index" {
+        show_index()
     } else {
         println!("usage: {} <command> [<args>]", &args[0]);
         return;
