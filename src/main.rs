@@ -7,7 +7,9 @@ use commit::Commit;
 use tree::EntryMode;
 use types::GitResult;
 use std::env;
-use std::io::{self, Write, Read};
+use std::fs::File;
+use std::io::{self, BufRead, BufReader, Read, Write};
+use std::process::Command;
 
 mod cache;
 mod commit;
@@ -42,19 +44,64 @@ fn show_commit(hash: &str) -> GitResult<()> {
     Ok(())
 }
 
+// Drop the user into vim so they can write a commit message
+fn prompt_commit_message() -> GitResult<Option<String>> {
+    // Create file
+    {
+        let mut file = try!(File::create(".git/COMMIT_EDITMSG"));
+        try!(file.write(b"
+# Please enter the commit message for your changes. Lines starting
+# with '#' will be ignored, and an empty message aborts the commit.\n"));
+    }
+
+    // Drop the user into vim
+    try!(Command::new("vim")
+                 .arg(".git/COMMIT_EDITMSG")
+                 .status());
+
+    // Read and parse the file
+    let mut file = try!(File::open(".git/COMMIT_EDITMSG"));
+    parse_commit_message(file)
+}
+
+// Read and parse a commit edit message file
+fn parse_commit_message(f: File) -> GitResult<Option<String>> {
+    // This could enforce some stricter rules
+    let mut reader = BufReader::new(f);
+    let mut message: String = String::new();
+    let mut has_content = false;
+    for line_res in reader.lines() {
+        let line = try!(line_res);
+        if line.get(0..1) == Some("#") {
+            continue;
+        }
+        if line.len() > 0 {
+            has_content = true;
+        }
+        message.push_str(&line);
+        message.push('\n');
+    }
+    Ok(match has_content {
+        true => Some(message),
+        false => None,
+    })
+}
+
 fn write_commit(parents: &[String]) -> GitResult<()> {
-    let message = {
-        let mut stdin = std::io::stdin();
-        let mut data = Vec::new();
-        try!(stdin.read_to_end(&mut data));
-        try!(String::from_utf8(data))
-    };
     // TODO
     let author = "Nick Frost <nickfrostatx@gmail.com>";
     let localtime = chrono::Local::now();
     let author_date = localtime.with_timezone(localtime.offset());
 
     let tree = try!(try!(index::read()).write_tree()).to_string();
+
+    let message = match try!(prompt_commit_message()) {
+        Some(msg) => msg,
+        None => {
+            println!("Aborting commit due to empty commit message.");
+            return Ok(());
+        },
+    };
 
     let commit = Commit {
         tree: String::from(tree),

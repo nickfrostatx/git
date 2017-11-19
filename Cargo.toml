@@ -7,5 +7,5 @@ license = "MIT"
 [dependencies]
 byteorder = "1"
 chrono = "0.4"
-flate2 = "0.2.20"
-sha1 = "0.2.0"
+flate2 = "0.2"
+sha1 = "0.2"
