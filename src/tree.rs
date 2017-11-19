@@ -30,7 +30,7 @@ pub fn from_object(object: &Object) -> GitResult<Tree> {
     let mut entries: Vec<TreeEntry> = Vec::new();
     loop {
         let mut mode_bytes = Vec::new();
-        if try!(cursor.read_until(b' ', &mut mode_bytes)) == 0 {
+        if cursor.read_until(b' ', &mut mode_bytes)? == 0 {
             break;
         }
         let mode = match &*mode_bytes {
@@ -40,9 +40,9 @@ pub fn from_object(object: &Object) -> GitResult<Tree> {
             b"40000 "  => EntryMode::Tree,
             _ => return Err(GitError::from("Malformed tree object")),
         };
-        let name = try!(parse::read_until(&mut cursor, b'\0'));
+        let name = parse::read_until(&mut cursor, b'\0')?;
         let mut hash: [u8; 20] = [0; 20];
-        try!(cursor.read_exact(&mut hash));
+        cursor.read_exact(&mut hash)?;
         entries.push(TreeEntry { mode: mode, name: name, hash: hash });
     }
 

@@ -58,55 +58,55 @@ pub fn from_object(object: &Object) -> GitResult<Commit> {
 
     // Parse tree
     let tree = {
-        let tree_line = try!(parse::read_until(&mut cursor, b'\n'));
+        let tree_line = parse::read_until(&mut cursor, b'\n')?;
         if tree_line.len() != 45 || &tree_line[0..5] != b"tree " {
             return Err(GitError::from("Malformed commit object"));
         }
-        try!(string_from_hex_bytes(&tree_line[5..45]))
+        string_from_hex_bytes(&tree_line[5..45])?
     };
 
     // Parse parents
     let mut parents: Vec<String> = Vec::new();
-    let mut line_type = try!(parse::read_until(&mut cursor, b' '));
+    let mut line_type = parse::read_until(&mut cursor, b' ')?;
     while &line_type == b"parent" {
-        let parent = try!(parse::read_until(&mut cursor, b'\n'));
+        let parent = parse::read_until(&mut cursor, b'\n')?;
         if parent.len() != 40 {
             return Err(GitError::from("Malformed commit object"));
         }
-        parents.push(try!(string_from_hex_bytes(&parent)));
+        parents.push(string_from_hex_bytes(&parent)?);
 
-        line_type = try!(parse::read_until(&mut cursor, b' '));
+        line_type = parse::read_until(&mut cursor, b' ')?;
     }
 
     // Parse author
     if &line_type != b"author" {
         return Err(GitError::from("Malformed commit object"));
     }
-    let author_line = try!(String::from_utf8(
-            try!(parse::read_until(&mut cursor, b'\n'))));
-    let (author, author_date) = try!(parse_author_line(author_line));
+    let author_line = String::from_utf8(
+            parse::read_until(&mut cursor, b'\n')?)?;
+    let (author, author_date) = parse_author_line(author_line)?;
 
     // Parse committer
-    line_type = try!(parse::read_until(&mut cursor, b' '));
+    line_type = parse::read_until(&mut cursor, b' ')?;
     if &line_type != b"committer" {
         return Err(GitError::from("Malformed commit object"));
     }
-    let committer_line = try!(String::from_utf8(
-            try!(parse::read_until(&mut cursor, b'\n'))));
-    let (committer, committer_date) = try!(parse_author_line(committer_line));
+    let committer_line = String::from_utf8(
+            parse::read_until(&mut cursor, b'\n')?)?;
+    let (committer, committer_date) = parse_author_line(committer_line)?;
     
     // Read either empty line, or gpgsig
     {
-        let mut mt_line = try!(parse::read_until(&mut cursor, b'\n'));
+        let mut mt_line = parse::read_until(&mut cursor, b'\n')?;
         if mt_line.len() > 6 && &mt_line[..6] == b"gpgsig" {
             loop {
-                let gpg_line = try!(parse::read_until(&mut cursor, b'\n'));
+                let gpg_line = parse::read_until(&mut cursor, b'\n')?;
                 if &gpg_line == b" -----END PGP SIGNATURE-----" {
                     break;
                 }
             }
             // Now we should definitely get the empty line
-            mt_line = try!(parse::read_until(&mut cursor, b'\n'));
+            mt_line = parse::read_until(&mut cursor, b'\n')?;
         }
         if &mt_line != b"" {
             return Err(GitError::from("Malformed commit object"));
@@ -115,8 +115,8 @@ pub fn from_object(object: &Object) -> GitResult<Commit> {
 
     // Read the rest of the commit
     let mut msg_bytes = Vec::new();
-    try!(cursor.read_to_end(&mut msg_bytes));
-    let message = try!(String::from_utf8(msg_bytes));
+    cursor.read_to_end(&mut msg_bytes)?;
+    let message = String::from_utf8(msg_bytes)?;
 
     Ok(Commit {
         tree: tree,

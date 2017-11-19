@@ -7,7 +7,7 @@ pub fn read_until(reader: &mut Read, end: u8) -> GitResult<Vec<u8>> {
     let mut buf = vec![0];
 
     loop {
-        try!(reader.read_exact(&mut buf));
+        reader.read_exact(&mut buf)?;
         if buf[0] == end {
             break;
         }

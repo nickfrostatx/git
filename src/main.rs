@@ -19,24 +19,24 @@ mod tree;
 mod types;
 
 fn cat_file(hash: &str) -> GitResult<()> {
-    let obj = try!(read_obj(hash));
-    try!(io::stdout().write(&obj.data));
+    let obj = read_obj(hash)?;
+    io::stdout().write(&obj.data)?;
     Ok(())
 }
 
 fn hash_object() -> GitResult<()> {
     let mut stdin = std::io::stdin();
     let mut data = Vec::new();
-    try!(stdin.read_to_end(&mut data));
+    stdin.read_to_end(&mut data)?;
     let obj = Object { kind: ObjectType::Blob, data: data };
-    let hash = try!(obj.write());
+    let hash = obj.write()?;
     println!("{}", hash);
     Ok(())
 }
 
 fn show_commit(hash: &str) -> GitResult<()> {
-    let obj = try!(read_obj(hash));
-    let commit = try!(commit::from_object(&obj));
+    let obj = read_obj(hash)?;
+    let commit = commit::from_object(&obj)?;
     println!("commit {}", hash);
     println!("Author: {}", commit.author);
     println!("Date:   {}", commit.author_date.format("%a %e %b %H:%M:%S %Y %z"));
@@ -48,19 +48,19 @@ fn show_commit(hash: &str) -> GitResult<()> {
 fn prompt_commit_message() -> GitResult<Option<String>> {
     // Create file
     {
-        let mut file = try!(File::create(".git/COMMIT_EDITMSG"));
-        try!(file.write(b"
+        let mut file = File::create(".git/COMMIT_EDITMSG")?;
+        file.write(b"
 # Please enter the commit message for your changes. Lines starting
-# with '#' will be ignored, and an empty message aborts the commit.\n"));
+# with '#' will be ignored, and an empty message aborts the commit.\n")?;
     }
 
     // Drop the user into vim
-    try!(Command::new("vim")
+    Command::new("vim")
                  .arg(".git/COMMIT_EDITMSG")
-                 .status());
+                 .status()?;
 
     // Read and parse the file
-    let mut file = try!(File::open(".git/COMMIT_EDITMSG"));
+    let mut file = File::open(".git/COMMIT_EDITMSG")?;
     parse_commit_message(file)
 }
 
@@ -71,7 +71,7 @@ fn parse_commit_message(f: File) -> GitResult<Option<String>> {
     let mut message: String = String::new();
     let mut has_content = false;
     for line_res in reader.lines() {
-        let line = try!(line_res);
+        let line = line_res?;
         if line.get(0..1) == Some("#") {
             continue;
         }
@@ -93,9 +93,9 @@ fn write_commit(parents: &[String]) -> GitResult<()> {
     let localtime = chrono::Local::now();
     let author_date = localtime.with_timezone(localtime.offset());
 
-    let tree = try!(try!(index::read()).write_tree()).to_string();
+    let tree = index::read()?.write_tree()?.to_string();
 
-    let message = match try!(prompt_commit_message()) {
+    let message = match prompt_commit_message()? {
         Some(msg) => msg,
         None => {
             println!("Aborting commit due to empty commit message.");
@@ -112,15 +112,15 @@ fn write_commit(parents: &[String]) -> GitResult<()> {
         committer_date: author_date.clone(),
         message: message,
     };
-    let hash = try!(commit.as_object().write());
+    let hash = commit.as_object().write()?;
     println!("{}", hash.to_string());
 
     Ok(())
 }
 
 fn show_tree(hash: &str) -> GitResult<()> {
-    let obj = try!(read_obj(hash));
-    let tree = try!(tree::from_object(&obj));
+    let obj = read_obj(hash)?;
+    let tree = tree::from_object(&obj)?;
 
     for entry in tree.entries {
         let mode_string = match entry.mode {
@@ -138,15 +138,15 @@ fn show_tree(hash: &str) -> GitResult<()> {
             hash_hex.push_str(&format!("{:02x}", byte));
         }
         println!("{0} {1} {2}    {3}", mode_string, kind_str, hash_hex,
-                 try!(String::from_utf8(entry.name)));
+                 String::from_utf8(entry.name)?);
     }
 
     Ok(())
 }
 
 fn write_tree() -> GitResult<()> {
-    let ndx = try!(index::read());
-    println!("{}", try!(ndx.write_tree()));
+    let ndx = index::read()?;
+    println!("{}", ndx.write_tree()?);
     Ok(())
 }
 
@@ -180,6 +180,7 @@ fn main() {
         "branch" => Err(GitError::from("Command not implemented")),
         "commit" => write_commit(&args[2..]),
         "diff" => Err(GitError::from("Command not implemented")),
+        "fsck" => Err(GitError::from("Command not implemented")),
         "init" => Err(GitError::from("Command not implemented")),
         "log" => Err(GitError::from("Command not implemented")),
         "merge" => Err(GitError::from("Command not implemented")),

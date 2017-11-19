@@ -39,26 +39,26 @@ fn path_for_hash(obj_hash: &str) -> PathBuf {
 }
 
 pub fn read_obj(hash: &str) -> GitResult<Object> {
-    let f = try!(fs::File::open(path_for_hash(hash)));
+    let f = fs::File::open(path_for_hash(hash))?;
     let mut decoder = ZlibDecoder::new(f);
-    let type_str = try!(parse::read_until(&mut decoder, b' '));
+    let type_str = parse::read_until(&mut decoder, b' ')?;
 
-    let kind: ObjectType = try!(match &type_str[..] {
-        b"blob" => Ok(ObjectType::Blob),
-        b"commit" => Ok(ObjectType::Commit),
-        b"tree" => Ok(ObjectType::Tree),
-        b"tag" => Ok(ObjectType::Tag),
-        _ => Err("Invalid object type"),
-    });
+    let kind: ObjectType = match &type_str[..] {
+        b"blob" => ObjectType::Blob,
+        b"commit" => ObjectType::Commit,
+        b"tree" => ObjectType::Tree,
+        b"tag" => ObjectType::Tag,
+        _ => return Err(GitError::from("Invalid object type")),
+    };
     
     let expected_size = {
-        let bytes = try!(parse::read_until(&mut decoder, b'\0'));
-        let s = try!(String::from_utf8(bytes));
-        try!(s.parse::<usize>())
+        let bytes = parse::read_until(&mut decoder, b'\0')?;
+        let s = String::from_utf8(bytes)?;
+        s.parse::<usize>()?
     };
 
     let mut data = vec![0; expected_size];
-    try!(decoder.read_exact(&mut data));
+    decoder.read_exact(&mut data)?;
 
     Ok(Object{
         kind: kind,
@@ -99,9 +99,9 @@ impl Object {
             Ok(f) => {
                 // Write object
                 let mut encoder = ZlibEncoder::new(f, Compression::Default);
-                try!(encoder.write(&header));
-                try!(encoder.write(&self.data));
-                try!(encoder.finish());
+                encoder.write(&header)?;
+                encoder.write(&self.data)?;
+                encoder.finish()?;
             },
             Err(err) => match err.kind() {
                 // It's fine if the object with that hash already exists
