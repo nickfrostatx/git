@@ -5,7 +5,7 @@ extern crate sha1;
 use cache::{Object, ObjectType, read_obj};
 use commit::Commit;
 use tree::EntryMode;
-use types::GitResult;
+use types::{GitError, GitResult};
 use std::env;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Read, Write};
@@ -67,7 +67,7 @@ fn prompt_commit_message() -> GitResult<Option<String>> {
 // Read and parse a commit edit message file
 fn parse_commit_message(f: File) -> GitResult<Option<String>> {
     // This could enforce some stricter rules
-    let mut reader = BufReader::new(f);
+    let reader = BufReader::new(f);
     let mut message: String = String::new();
     let mut has_content = false;
     for line_res in reader.lines() {
@@ -170,6 +170,22 @@ fn main() {
     }
 
     let result = match args[1].as_ref() {
+        // Porcelain commands (I plan on implementing all of these)
+        "add" => {
+            if args.len() < 2 {
+                println!("usage")
+            }
+            add(&args[2..])
+        },
+        "branch" => Err(GitError::from("Command not implemented")),
+        "commit" => write_commit(&args[2..]),
+        "diff" => Err(GitError::from("Command not implemented")),
+        "init" => Err(GitError::from("Command not implemented")),
+        "log" => Err(GitError::from("Command not implemented")),
+        "merge" => Err(GitError::from("Command not implemented")),
+        "show" => Err(GitError::from("Command not implemented")),
+        "status" => Err(GitError::from("Command not implemented")),
+        // Plumbing commands
         "cat-file" =>  {
             if args.len() != 3 {
                 println!("usage: {} cat-file <sha1>", &args[0]);
@@ -185,13 +201,6 @@ fn main() {
             }
             show_commit(&args[2])
         },
-        "add" => {
-            if args.len() < 2 {
-                println!("usage")
-            }
-            add(&args[2..])
-        },
-        "commit" => write_commit(&args[2..]),
         "show-tree" => {
             if args.len() != 3 {
                 println!("usage: {} commit <sha1>", &args[0]);
