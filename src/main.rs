@@ -103,6 +103,18 @@ fn write_tree() -> GitResult<()> {
     Ok(())
 }
 
+// TODO
+fn add(files: &[String]) -> GitResult<()> {
+    let ndx = try!(index::read());
+    for _file in files {
+        // is this a file, symlink, or directory?
+        //  file or symlink - create object and run ndx.add() or something
+        //  directory - ehhh, recurse or something? does rust have a os.walk?
+        // It might make sense to make Index.entries a BST instead of a list
+    }
+    ndx.write()
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
@@ -126,13 +138,13 @@ fn main() {
             }
             show_commit(&args[2])
         },
-        "commit" => {
+        "add" => {
             if args.len() < 2 {
-                println!("usage: {} commit [<parent> ..]", &args[0]);
-                return;
+                println!("usage")
             }
-            write_commit(&args[2..])
+            add(&args[2..])
         },
+        "commit" => write_commit(&args[2..]),
         "show-tree" => {
             if args.len() != 3 {
                 println!("usage: {} commit <sha1>", &args[0]);
