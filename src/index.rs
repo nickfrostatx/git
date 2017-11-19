@@ -2,10 +2,10 @@ extern crate byteorder;
 
 use parse;
 use self::byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use sha1::{self, Sha1};
+use sha1::{Digest, Sha1};
 use std::fs;
 use std::io::{self, Read, Write};
-use tree::EntryMode;
+use tree::{EntryMode, Tree, TreeEntry};
 use types::{GitError, GitResult};
 
 pub struct Index {
@@ -110,7 +110,7 @@ struct HashingWriter {
 }
 
 impl HashingWriter {
-    fn digest(&self) -> sha1::Digest {
+    fn digest(&self) -> Digest {
         self.hash.digest()
     }
 }
@@ -127,6 +127,7 @@ impl Write for HashingWriter {
 }
 
 impl Index {
+    // Write out to index file
     pub fn write(&self) -> GitResult<()> {
         let file = try!(fs::File::create(".git/index"));
         let hash = Sha1::new();
@@ -171,5 +172,74 @@ impl Index {
         try!(w.write_all(&digest));
 
         Ok(())
+    }
+
+    // Create trees
+    pub fn write_tree(&self) -> GitResult<Digest> {
+        // Create a stack of trees, With just the root initially
+        let mut tree_stack: Vec<(Vec<u8>, Tree)> = Vec::new();
+        tree_stack.push((b"root".to_vec(), Tree { entries: Vec::new() }));
+
+        for entry in self.entries.iter() {
+            let parts: Vec<&[u8]> = entry.name.split(|c| *c == b'/').collect();
+
+            // Figure out if we need to write out some trees from the stack
+            for i in 1..tree_stack.len() {
+                if i >= parts.len() || tree_stack[i].0 != parts[i - 1] {
+                    try!(truncate_tree_stack(&mut tree_stack, i));
+                    break;
+                }
+            }
+
+            // Append any new trees to the stack
+            for part in parts[(tree_stack.len() - 1)..(parts.len() - 1)].iter() {
+                let new_tree = Tree { entries: Vec::new() };
+                tree_stack.push((Vec::from(*part), new_tree));
+            }
+
+            let bottom_tree = match tree_stack.last_mut() {
+                Some(&mut (_, ref mut tree)) => tree,
+                None => return Err(GitError::from("Unexpected error")),
+            };
+            bottom_tree.entries.push(TreeEntry {
+                mode: entry.mode.clone(),
+                name: Vec::from(parts[parts.len() - 1]),
+                hash: entry.hash.clone(),
+            });
+        }
+
+        // Write out the rest of the trees
+        truncate_tree_stack(&mut tree_stack, 0)
+    }
+}
+
+// Remove and write the trees on the stack starting from position at
+// Return the hash of the highest level tree written
+fn truncate_tree_stack(stack: &mut Vec<(Vec<u8>, Tree)>, at: usize)
+        -> GitResult<Digest> {
+    let mut result: Option<Digest> = None;
+    while stack.len() > at {
+        let (name, tree) = match stack.pop() {
+            Some(tup) => tup,
+            // This probably can't happen
+            None => return Err(GitError::from("Unexpected error")),
+        };
+        // Write the tre
+        let digest = try!(tree.as_object().write());
+
+        // Add an entry for tree in its parent
+        match stack.last_mut() {
+            Some(&mut (_, ref mut parent)) => parent.entries.push(TreeEntry {
+                mode: EntryMode::Tree,
+                name: name,
+                hash: digest.bytes(),
+            }),
+            None => (),
+        }
+        result = Some(digest);
+    }
+    match result {
+        Some(digest) => Ok(digest),
+        None => Err(GitError::from("Tried to truncate empty stack")),
     }
 }

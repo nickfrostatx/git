@@ -7,6 +7,7 @@ pub struct Tree {
     pub entries: Vec<TreeEntry>,
 }
 
+#[derive(Clone)]
 pub enum EntryMode {
     NormalFile,
     ExecutableFile,

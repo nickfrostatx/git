@@ -2,7 +2,7 @@ extern crate chrono;
 extern crate flate2;
 extern crate sha1;
 
-use cache::{Object, ObjectType, write_obj, read_obj};
+use cache::{Object, ObjectType, read_obj};
 use commit::Commit;
 use tree::EntryMode;
 use types::GitResult;
@@ -27,7 +27,7 @@ fn hash_object() -> GitResult<()> {
     let mut data = Vec::new();
     try!(stdin.read_to_end(&mut data));
     let obj = Object { kind: ObjectType::Blob, data: data };
-    let hash = try!(write_obj(&obj));
+    let hash = try!(obj.write());
     println!("{}", hash);
     Ok(())
 }
@@ -63,8 +63,8 @@ fn write_commit(tree: &str, parents: &[String]) -> GitResult<()> {
         committer_date: author_date.clone(),
         message: message,
     };
-    let hash = try!(write_obj(&commit.as_object()));
-    println!("{}", hash);
+    let hash = try!(commit.as_object().write());
+    println!("{}", hash.to_string());
 
     Ok(())
 }
@@ -96,9 +96,13 @@ fn show_tree(hash: &str) -> GitResult<()> {
 }
 
 fn show_index() -> GitResult<()> {
-    let ndx = try!(index::read());
-    try!(ndx.write());
+    try!(index::read());
+    Ok(())
+}
 
+fn write_tree() -> GitResult<()> {
+    let ndx = try!(index::read());
+    println!("{}", try!(ndx.write_tree()));
     Ok(())
 }
 
@@ -109,42 +113,42 @@ fn main() {
         return;
     }
 
-    let result = if args[1] == "cat-file" {
-        if args.len() != 3 {
-            println!("usage: {} cat-file <sha1>", &args[0]);
+    let result = match args[1].as_ref() {
+        "cat-file" =>  {
+            if args.len() != 3 {
+                println!("usage: {} cat-file <sha1>", &args[0]);
+                return;
+            }
+            cat_file(&args[2])
+        },
+        "hash-object" => hash_object(),
+        "show-commit" => {
+            if args.len() != 3 {
+                println!("usage: {} show-commit <sha1>", &args[0]);
+                return;
+            }
+            show_commit(&args[2])
+        },
+        "commit" => {
+            if args.len() < 3 {
+                println!("usage: {} commit <tree> [<parent> ..]", &args[0]);
+                return;
+            }
+            write_commit(&args[2], &args[3..])
+        },
+        "show-tree" => {
+            if args.len() != 3 {
+                println!("usage: {} commit <sha1>", &args[0]);
+                return;
+            }
+            show_tree(&args[2])
+        },
+        "show-index" => show_index(),
+        "write-tree" => write_tree(),
+        _ => {
+            println!("usage: {} <command> [<args>]", &args[0]);
             return;
-        }
-        cat_file(&args[2])
-    }
-    else if args[1] == "hash-object" {
-        hash_object()
-    }
-    else if args[1] == "show-commit" {
-        if args.len() != 3 {
-            println!("usage: {} show-commit <sha1>", &args[0]);
-            return;
-        }
-        show_commit(&args[2])
-    }
-    else if args[1] == "commit" {
-        if args.len() < 3 {
-            println!("usage: {} commit <tree> [<parent> ..]", &args[0]);
-            return;
-        }
-        write_commit(&args[2], &args[3..])
-    }
-    else if args[1] == "show-tree" {
-        if args.len() != 3 {
-            println!("usage: {} commit <sha1>", &args[0]);
-            return;
-        }
-        show_tree(&args[2])
-    }
-    else if args[1] == "show-index" {
-        show_index()
-    } else {
-        println!("usage: {} <command> [<args>]", &args[0]);
-        return;
+        },
     };
 
     match result {

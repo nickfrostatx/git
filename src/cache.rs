@@ -6,7 +6,7 @@ use std::str;
 use flate2::Compression;
 use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
-use sha1::Sha1;
+use sha1::{Digest, Sha1};
 
 use parse;
 use types::{GitError, GitResult};
@@ -66,47 +66,50 @@ pub fn read_obj(hash: &str) -> GitResult<Object> {
     })
 }
 
-pub fn write_obj(obj: &Object) -> GitResult<String> {
-    let kind_name = match obj.kind {
-        ObjectType::Blob => "blob",
-        ObjectType::Commit => "commit",
-        ObjectType::Tree => "tree",
-        ObjectType::Tag => "tag",
-    };
+impl Object {
+    pub fn write(self) -> GitResult<Digest> {
+        let kind_name = match self.kind {
+            ObjectType::Blob => "blob",
+            ObjectType::Commit => "commit",
+            ObjectType::Tree => "tree",
+            ObjectType::Tag => "tag",
+        };
 
-    let header = format!("{0} {1}\0", kind_name, obj.data.len()).into_bytes();
+        let header = format!("{0} {1}\0", kind_name, self.data.len()).into_bytes();
 
-    // Compute object SHA1
-    let mut m = Sha1::new();
-    m.update(&header);
-    m.update(&obj.data);
-    let hash = m.digest().to_string();
+        // Compute object SHA1
+        let mut m = Sha1::new();
+        m.update(&header);
+        m.update(&self.data);
+        let digest = m.digest();
+        let name = digest.to_string();
 
-    // Create containing directory
-    match fs::create_dir(dir_for_hash(&hash)) {
-        Ok(_) => (),
-        Err(err) => match err.kind() {
-            io::ErrorKind::AlreadyExists => (),
-            _ => return Err(GitError::from(err)),
-        },
+        // Create containing directory
+        match fs::create_dir(dir_for_hash(&name)) {
+            Ok(_) => (),
+            Err(err) => match err.kind() {
+                io::ErrorKind::AlreadyExists => (),
+                _ => return Err(GitError::from(err)),
+            },
+        }
+
+        // Actually create the file
+        let file_path = path_for_hash(&name);
+        match fs::OpenOptions::new().write(true).create_new(true).open(file_path) {
+            Ok(f) => {
+                // Write object
+                let mut encoder = ZlibEncoder::new(f, Compression::Default);
+                try!(encoder.write(&header));
+                try!(encoder.write(&self.data));
+                try!(encoder.finish());
+            },
+            Err(err) => match err.kind() {
+                // It's fine if the object with that hash already exists
+                io::ErrorKind::AlreadyExists => (),
+                _ => return Err(GitError::from(err)),
+            },
+        }
+
+        Ok(digest)
     }
-
-    // Actually create the file
-    let file_path = path_for_hash(&hash);
-    match fs::OpenOptions::new().write(true).create_new(true).open(file_path) {
-        Ok(f) => {
-            // Write object
-            let mut encoder = ZlibEncoder::new(f, Compression::Default);
-            try!(encoder.write(&header));
-            try!(encoder.write(&obj.data));
-            try!(encoder.finish());
-        },
-        Err(err) => match err.kind() {
-            // It's fine if the object with that hash already exists
-            io::ErrorKind::AlreadyExists => (),
-            _ => return Err(GitError::from(err)),
-        },
-    }
-
-    Ok(hash)
 }
