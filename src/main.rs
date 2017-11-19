@@ -42,7 +42,7 @@ fn show_commit(hash: &str) -> GitResult<()> {
     Ok(())
 }
 
-fn write_commit(tree: &str, parents: &[String]) -> GitResult<()> {
+fn write_commit(parents: &[String]) -> GitResult<()> {
     let message = {
         let mut stdin = std::io::stdin();
         let mut data = Vec::new();
@@ -53,6 +53,8 @@ fn write_commit(tree: &str, parents: &[String]) -> GitResult<()> {
     let author = "Nick Frost <nickfrostatx@gmail.com>";
     let localtime = chrono::Local::now();
     let author_date = localtime.with_timezone(localtime.offset());
+
+    let tree = try!(try!(index::read()).write_tree()).to_string();
 
     let commit = Commit {
         tree: String::from(tree),
@@ -95,11 +97,6 @@ fn show_tree(hash: &str) -> GitResult<()> {
     Ok(())
 }
 
-fn show_index() -> GitResult<()> {
-    try!(index::read());
-    Ok(())
-}
-
 fn write_tree() -> GitResult<()> {
     let ndx = try!(index::read());
     println!("{}", try!(ndx.write_tree()));
@@ -130,11 +127,11 @@ fn main() {
             show_commit(&args[2])
         },
         "commit" => {
-            if args.len() < 3 {
-                println!("usage: {} commit <tree> [<parent> ..]", &args[0]);
+            if args.len() < 2 {
+                println!("usage: {} commit [<parent> ..]", &args[0]);
                 return;
             }
-            write_commit(&args[2], &args[3..])
+            write_commit(&args[2..])
         },
         "show-tree" => {
             if args.len() != 3 {
@@ -143,7 +140,6 @@ fn main() {
             }
             show_tree(&args[2])
         },
-        "show-index" => show_index(),
         "write-tree" => write_tree(),
         _ => {
             println!("usage: {} <command> [<args>]", &args[0]);

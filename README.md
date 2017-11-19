@@ -5,8 +5,6 @@
 I'm building this to learn more about Rust and Git. Don't actually use this for
 anything.
 
-Note: The index file isn't implemented yet.
-
 ```bash
 $ echo "Hello world" > hello.txt
 $ ./git add hello.txt
