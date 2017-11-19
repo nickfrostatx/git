@@ -6,6 +6,7 @@ I'm building this to learn more about Rust and Git. Don't actually use this for
 anything.
 
 ```bash
+$ ./git init
 $ echo "Hello world" > hello.txt
 $ ./git add hello.txt
 $ echo "Initial commit" | ./git commit

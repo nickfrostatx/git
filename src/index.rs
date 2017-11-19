@@ -181,6 +181,7 @@ impl Index {
         tree_stack.push((b"root".to_vec(), Tree { entries: Vec::new() }));
 
         for entry in self.entries.iter() {
+            // TODO: use std::path::Path for this
             let parts: Vec<&[u8]> = entry.name.split(|c| *c == b'/').collect();
 
             // Figure out if we need to write out some trees from the stack
