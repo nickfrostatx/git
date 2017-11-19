@@ -98,7 +98,7 @@ pub fn from_object(object: &Object) -> GitResult<Commit> {
     // Read either empty line, or gpgsig
     {
         let mut mt_line = try!(parse::read_until(&mut cursor, b'\n'));
-        if &mt_line[..6] == b"gpgsig" {
+        if mt_line.len() > 6 && &mt_line[..6] == b"gpgsig" {
             loop {
                 let gpg_line = try!(parse::read_until(&mut cursor, b'\n'));
                 if &gpg_line == b" -----END PGP SIGNATURE-----" {
