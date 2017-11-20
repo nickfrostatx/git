@@ -19,6 +19,7 @@ mod cache;
 mod commit;
 mod index;
 mod parse;
+mod refs;
 mod tree;
 mod types;
 
@@ -207,6 +208,13 @@ fn add(paths: &[String]) -> GitResult<()> {
     ndx.write()
 }
 
+fn rev_parse(paths: &[String]) -> GitResult<()> {
+    for path in paths {
+        println!("{}", refs::rev_parse(&path)?);
+    }
+    Ok(())
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
@@ -249,6 +257,7 @@ fn main() {
             }
             show_tree(&args[2])
         },
+        "rev-parse" => rev_parse(&args[2..]),
         "write-tree" => write_tree(),
         _ => {
             println!("usage: {} <command> [<args>]", &args[0]);
