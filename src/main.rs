@@ -191,6 +191,12 @@ fn add_recursive(ndx: &mut Index, path: &Path) -> GitResult<()> {
 }
 
 fn add(paths: &[String]) -> GitResult<()> {
+    if paths.len() == 0 {
+        println!("Nothing specified, nothing added.");
+        println!("Maybe you wanted to say 'git add .'?");
+        return Ok(());
+    }
+
     let mut ndx = index::read()?;
     for path in paths {
         match make_relative(&Path::new(path)) {
@@ -210,12 +216,7 @@ fn main() {
 
     let result = match args[1].as_ref() {
         // Porcelain commands (I plan on implementing all of these)
-        "add" => {
-            if args.len() < 2 {
-                println!("usage")
-            }
-            add(&args[2..])
-        },
+        "add" => add(&args[2..]),
         "branch" => Err(GitError::from("Command not implemented")),
         "commit" => write_commit(&args[2..]),
         "diff" => Err(GitError::from("Command not implemented")),
