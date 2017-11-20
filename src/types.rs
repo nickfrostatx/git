@@ -4,6 +4,7 @@ use std::io;
 use std::num;
 use std::str;
 use std::string;
+use std::time;
 
 #[derive(Debug)]
 pub enum GitError {
@@ -59,5 +60,11 @@ impl From<string::FromUtf8Error> for GitError {
 impl From<num::ParseIntError> for GitError {
     fn from(_: num::ParseIntError) -> GitError {
         GitError::Message("Invalid integer")
+    }
+}
+
+impl From<time::SystemTimeError> for GitError {
+    fn from(_: time::SystemTimeError) -> GitError {
+        GitError::Message("System time error")
     }
 }

@@ -1,15 +1,20 @@
 extern crate byteorder;
 
+use cache::{Object, ObjectType};
 use parse;
 use self::byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use sha1::{Digest, Sha1};
-use std::fs;
+use std::collections::BTreeMap;
+use std::fs::{File, Metadata};
 use std::io::{self, Read, Write};
+use std::os::unix::fs::MetadataExt;
+use std::path::Path;
+use std::time::UNIX_EPOCH;
 use tree::{EntryMode, Tree, TreeEntry};
 use types::{GitError, GitResult};
 
 pub struct Index {
-    pub entries: Vec<IndexEntry>,
+    pub entries: BTreeMap<Vec<u8>, IndexEntry>,
 }
 
 pub struct IndexEntry {
@@ -25,15 +30,16 @@ pub struct IndexEntry {
     pub size: u32,
     pub assume_valid: bool,
     pub hash: [u8; 20],
-    pub name: Vec<u8>,
 }
 
 pub fn read() -> GitResult<Index> {
-    let mut file = match fs::File::open(".git/index") {
+    let mut file = match File::open(".git/index") {
         Ok(f) => f,
         Err(err) => match err.kind() {
             // If there is no index file, use an empty index
-            io::ErrorKind::NotFound => return Ok(Index { entries: Vec::new() }),
+            io::ErrorKind::NotFound => return Ok(Index {
+                entries: BTreeMap::new(),
+            }),
             _ => return Err(GitError::from(err)),
         },
     };
@@ -45,7 +51,7 @@ pub fn read() -> GitResult<Index> {
     }
 
     let num_entries = file.read_u32::<BigEndian>()? as usize;
-    let mut entries: Vec<IndexEntry> = Vec::with_capacity(num_entries);
+    let mut entries: BTreeMap<Vec<u8>, IndexEntry> = BTreeMap::new();
 
     while entries.len() < num_entries {
         let ctime = file.read_u32::<BigEndian>()?;
@@ -95,9 +101,9 @@ pub fn read() -> GitResult<Index> {
         let entry = IndexEntry {
             ctime: ctime, ctime_ns: ctime_ns, mtime: mtime, mtime_ns: mtime_ns,
             dev: dev, ino: ino, mode: mode, uid: uid, gid: gid, size: size,
-            assume_valid: assume_valid, hash: hash, name: name,
+            assume_valid: assume_valid, hash: hash,
         };
-        entries.push(entry);
+        entries.insert(name, entry);
     }
 
     Ok(Index { entries: entries })
@@ -105,7 +111,7 @@ pub fn read() -> GitResult<Index> {
 
 // Helper to track the SHA of the file's contents as we write to it
 struct HashingWriter {
-    file: fs::File,
+    file: File,
     hash: Sha1,
 }
 
@@ -129,14 +135,14 @@ impl Write for HashingWriter {
 impl Index {
     // Write out to index file
     pub fn write(&self) -> GitResult<()> {
-        let file = fs::File::create(".git/index")?;
+        let file = File::create(".git/index")?;
         let hash = Sha1::new();
         let mut w = HashingWriter {file: file, hash: hash};
 
         w.write_all(b"DIRC\0\0\0\x02")?;
         w.write_u32::<BigEndian>(self.entries.len() as u32)?;
 
-        for entry in self.entries.iter() {
+        for (name, entry) in self.entries.iter() {
             w.write_u32::<BigEndian>(entry.ctime)?;
             w.write_u32::<BigEndian>(entry.ctime_ns)?;
             w.write_u32::<BigEndian>(entry.mtime)?;
@@ -154,16 +160,16 @@ impl Index {
             w.write_u32::<BigEndian>(entry.size)?;
             w.write_all(&entry.hash)?;
 
-            let flags: u16 = if entry.name.len() <= 0xfff {
-                entry.name.len() as u16
+            let flags: u16 = if name.len() <= 0xfff {
+                name.len() as u16
             } else {
                 0xfff
             };
             w.write_u16::<BigEndian>(flags)?;
 
-            w.write_all(&entry.name)?;
+            w.write_all(&name)?;
             // Pad entry size to a multiple of 8 bytes, with NUL's
-            let num_pad = 8 - (entry.name.len() + 6) % 8;
+            let num_pad = 8 - (name.len() + 6) % 8;
             let padding = vec![0; num_pad];
             w.write_all(&padding)?;
         }
@@ -174,15 +180,69 @@ impl Index {
         Ok(())
     }
 
+    pub fn add(&mut self, path: &Path, meta: &Metadata) -> GitResult<()> {
+        let name: Vec<u8> = match path.as_os_str().to_str() {
+            Some(s) => s.as_bytes().to_vec(),
+            None => return Err(GitError::from("Invalid UTF-8 filename")),
+        };
+
+        let hash: [u8; 20] = {
+            let mut file = File::open(path)?;
+            let mut contents = Vec::new();
+            file.read_to_end(&mut contents)?;
+            let obj = Object { kind: ObjectType::Blob, data: contents };
+            obj.write()?.bytes()
+        };
+
+        let file_type = meta.file_type();
+        let mode = if file_type.is_file() {
+            if meta.mode() & 0b1_000_000 != 0 {
+                EntryMode::ExecutableFile
+            } else {
+                EntryMode::NormalFile
+            }
+        } else if file_type.is_symlink() {
+            EntryMode::Symlink
+        } else {
+            return Err(GitError::from("Tried to add a non-file"));
+        };
+
+        // Unpack timestamps
+        let (ctime, ctime_ns) = {
+            let duration = meta.created()?.duration_since(UNIX_EPOCH)?;
+            (duration.as_secs() as u32, duration.subsec_nanos())
+        };
+        let (mtime, mtime_ns) = {
+            let duration = meta.modified()?.duration_since(UNIX_EPOCH)?;
+            (duration.as_secs() as u32, duration.subsec_nanos())
+        };
+
+        self.entries.insert(name, IndexEntry {
+            ctime: ctime,
+            ctime_ns: ctime_ns,
+            mtime: mtime,
+            mtime_ns: mtime_ns,
+            dev: meta.dev() as u32,
+            ino: meta.ino() as u32,
+            mode: mode,
+            uid: meta.uid() as u32,
+            gid: meta.gid() as u32,
+            size: meta.size() as u32,
+            assume_valid: false,
+            hash: hash,
+        });
+        Ok(())
+    }
+
     // Create trees
     pub fn write_tree(&self) -> GitResult<Digest> {
         // Create a stack of trees, With just the root initially
         let mut tree_stack: Vec<(Vec<u8>, Tree)> = Vec::new();
         tree_stack.push((b"root".to_vec(), Tree { entries: Vec::new() }));
 
-        for entry in self.entries.iter() {
+        for (name, entry) in self.entries.iter() {
             // TODO: use std::path::Path for this
-            let parts: Vec<&[u8]> = entry.name.split(|c| *c == b'/').collect();
+            let parts: Vec<&[u8]> = name.split(|c| *c == b'/').collect();
 
             // Figure out if we need to write out some trees from the stack
             for i in 1..tree_stack.len() {

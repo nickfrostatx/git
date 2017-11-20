@@ -4,11 +4,15 @@ extern crate sha1;
 
 use cache::{Object, ObjectType, read_obj};
 use commit::Commit;
+use index::Index;
 use tree::EntryMode;
 use types::{GitError, GitResult};
+use std::collections::HashSet;
 use std::env;
-use std::fs::File;
+use std::ffi::OsString;
+use std::fs::{self, File};
 use std::io::{self, BufRead, BufReader, Read, Write};
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 mod cache;
@@ -60,7 +64,7 @@ fn prompt_commit_message() -> GitResult<Option<String>> {
                  .status()?;
 
     // Read and parse the file
-    let mut file = File::open(".git/COMMIT_EDITMSG")?;
+    let file = File::open(".git/COMMIT_EDITMSG")?;
     parse_commit_message(file)
 }
 
@@ -150,14 +154,49 @@ fn write_tree() -> GitResult<()> {
     Ok(())
 }
 
-// TODO
-fn add(files: &[String]) -> GitResult<()> {
-    let ndx = try!(index::read());
-    for _file in files {
-        // is this a file, symlink, or directory?
-        //  file or symlink - create object and run ndx.add() or something
-        //  directory - ehhh, recurse or something? does rust have a os.walk?
-        // It might make sense to make Index.entries a BST instead of a list
+fn make_relative(path: &Path) -> Option<PathBuf> {
+    // TODO
+    Some(path.to_path_buf())
+}
+
+fn should_ignore(path: &Path) -> bool {
+    const IGNORE_NAMES: [&str; 3] = [".git", "target", "Cargo.lock"];
+    let to_ignore: HashSet<OsString> =
+            IGNORE_NAMES.iter().map(|p| OsString::from(p)).collect();
+    return path.components().any(
+            |p| to_ignore.contains(p.as_os_str()))
+}
+
+fn add_recursive(ndx: &mut Index, path: &Path) -> GitResult<()> {
+    if should_ignore(path) {
+        return Ok(());
+    }
+
+    let meta = fs::symlink_metadata(path)?;
+    let file_type = meta.file_type();
+
+    if file_type.is_file() || file_type.is_symlink() {
+        // Just add the file
+        ndx.add(&path, &meta)?;
+    } else if file_type.is_dir() {
+        // Recurse
+        for entry in fs::read_dir(path)? {
+            let entry = entry?;
+            add_recursive(ndx, &entry.path())?;
+        }
+    } else {
+        // Skip any files that aren't paths, symlinks, or directories
+    }
+    Ok(())
+}
+
+fn add(paths: &[String]) -> GitResult<()> {
+    let mut ndx = index::read()?;
+    for path in paths {
+        match make_relative(&Path::new(path)) {
+            Some(p) => add_recursive(&mut ndx, &p)?,
+            None => (),
+        }
     }
     ndx.write()
 }
