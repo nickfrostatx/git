@@ -14,6 +14,15 @@ cdd69f086a8d8b0fbe93d91e48d53ce8750bd9c4
 $ echo cdd69f086a8d8b0fbe93d91e48d53ce8750bd9c4 > .git/refs/heads/master
 ```
 
-## TODO
+## Features to implement
 
-* Implement the cached tree index extension
+- [x] object cache creation
+- [x] work tree index updating
+- [ ] cached tree index extension
+- [x] tree parsing
+- [x] `git add` command
+- [x] commit creation
+- [ ] rev parsing (in progress)
+- [ ] `git checkout` command
+- [ ] `git diff` command
+- [ ] reflog iteration
