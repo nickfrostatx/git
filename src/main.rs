@@ -45,7 +45,7 @@ fn show_commit(hash: &str) -> GitResult<()> {
     println!("commit {}", hash);
     println!("Author: {}", commit.author);
     println!("Date:   {}", commit.author_date.format("%a %e %b %H:%M:%S %Y %z"));
-    println!("\n{}", commit.message);
+    print!("\n{}", commit.message);
     Ok(())
 }
 
@@ -210,7 +210,7 @@ fn add(paths: &[String]) -> GitResult<()> {
 
 fn rev_parse(paths: &[String]) -> GitResult<()> {
     for path in paths {
-        println!("{}", refs::rev_parse(&path)?);
+        println!("{}", refs::read_ref_from_refname(&path)?);
     }
     Ok(())
 }
