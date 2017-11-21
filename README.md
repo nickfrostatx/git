@@ -16,13 +16,13 @@ $ echo cdd69f086a8d8b0fbe93d91e48d53ce8750bd9c4 > .git/refs/heads/master
 
 ## Features to implement
 
-- [x] object cache creation
-- [x] work tree index updating
 - [ ] cached tree index extension
-- [x] tree parsing
-- [x] `git add` command
-- [x] commit creation
 - [ ] rev parsing (in progress)
 - [ ] `git checkout` command
 - [ ] `git diff` command
 - [ ] reflog iteration
+- [x] object cache creation
+- [x] work tree index updating
+- [x] tree parsing
+- [x] `git add` command
+- [x] commit creation
