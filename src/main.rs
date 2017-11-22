@@ -210,7 +210,8 @@ fn add(paths: &[String]) -> GitResult<()> {
 
 fn rev_parse(paths: &[String]) -> GitResult<()> {
     for path in paths {
-        println!("{}", refs::read_ref_from_refname(&path)?);
+        let full_ref = refs::expand_refname(&path)?;
+        println!("{}", refs::read_ref(&full_ref)?);
     }
     Ok(())
 }
