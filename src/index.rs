@@ -8,6 +8,7 @@ use std::collections::BTreeMap;
 use std::fs::{File, Metadata};
 use std::io::{self, Read, Write};
 use std::os::unix::fs::MetadataExt;
+use std::os::unix::ffi::OsStringExt;
 use std::path::Path;
 use std::time::UNIX_EPOCH;
 use tree::{EntryMode, Tree, TreeEntry};
@@ -186,25 +187,30 @@ impl Index {
             None => return Err(GitError::from("Invalid UTF-8 filename")),
         };
 
-        let hash: [u8; 20] = {
+        // Figure out file mode and data
+        let file_type = meta.file_type();
+        let (mode, data) = if file_type.is_file() {
+            // Regular file, just read it
             let mut file = File::open(path)?;
             let mut contents = Vec::new();
             file.read_to_end(&mut contents)?;
-            let obj = Object { kind: ObjectType::Blob, data: contents };
-            obj.write()?.bytes()
-        };
-
-        let file_type = meta.file_type();
-        let mode = if file_type.is_file() {
             if meta.mode() & 0b1_000_000 != 0 {
-                EntryMode::ExecutableFile
+                (EntryMode::ExecutableFile, contents)
             } else {
-                EntryMode::NormalFile
+                (EntryMode::NormalFile, contents)
             }
         } else if file_type.is_symlink() {
-            EntryMode::Symlink
+            // The data is the symlink destination
+            let dest = path.read_link()?;
+            (EntryMode::Symlink, dest.into_os_string().into_vec())
         } else {
             return Err(GitError::from("Tried to add a non-file"));
+        };
+
+        // Write the object and get the hash
+        let hash: [u8; 20] = {
+            let obj = Object { kind: ObjectType::Blob, data: data };
+            obj.write()?.bytes()
         };
 
         // Unpack timestamps
