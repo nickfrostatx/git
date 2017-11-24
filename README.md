@@ -19,6 +19,7 @@ $ echo cdd69f086a8d8b0fbe93d91e48d53ce8750bd9c4 > .git/refs/heads/master
 - [ ] cached tree index extension
 - [ ] rev parsing (in progress)
 - [ ] fix adding for symlinks
+- [ ] packfiles
 - [ ] `git checkout` command
 - [ ] `git diff` command
 - [ ] reflog iteration
